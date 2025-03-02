@@ -1,11 +1,18 @@
 # lightweight jwt auth microservice
 
-/signin
+*/signin*
+
   sign in with email/password
   sign in sets jwt cookie
-/signup
+  
+*/signup*
+
   sign up with email/password
-/signout
+  
+*/signout*
+
   resets jwt cookie to expire
-/heartbeat
+
+*/heartbeat*
+
   for checking status of service
