@@ -20,6 +20,8 @@ func main() {
 	mux.HandleFunc(routes.SignIn, handlers.SignIn)
 	mux.HandleFunc(routes.SignUp, handlers.SignUp)
 	mux.HandleFunc(routes.SignOut, handlers.SignOut)
+	mux.HandleFunc(routes.Validate, handlers.Validate)
+	mux.HandleFunc(routes.Parse, handlers.Parse)
 
 	// Apply CORS Middleware
 	handler := cors.New(cors.Options{

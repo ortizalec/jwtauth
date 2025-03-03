@@ -32,7 +32,7 @@ type SignInResponse struct {
 }
 
 func SignIn(w http.ResponseWriter, r *http.Request) {
-	log.Info("POST", "path", routes.SignIn)
+	log.Info(routes.SignIn)
 	var requestData SignInRequest
 
 	err := json.NewDecoder(r.Body).Decode(&requestData)
@@ -71,7 +71,7 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load RSA private key
-	key, err := LoadRSAKey("private-key.pem")
+	key, err := LoadRSAPrivateKey("private-key.pem")
 	if err != nil {
 		log.Error("Failed to load RSA key", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -106,6 +106,7 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(time.Hour * 24),
 		Path:     "/",
 	})
+	log.Info(signedToken)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(responseData)
 }
@@ -116,7 +117,7 @@ type HeartbeatResponse struct {
 }
 
 func Heartbeat(w http.ResponseWriter, r *http.Request) {
-	log.Info("GET", "path", routes.Heartbeat)
+	log.Info(routes.Heartbeat)
 	data := HeartbeatResponse{Timestamp: time.Now(), Status: "healthy"}
 	w.Header().Set("Content-Type", "apllication/json")
 	w.WriteHeader((http.StatusOK))
@@ -133,7 +134,7 @@ type SignUpResponse struct {
 }
 
 func SignUp(w http.ResponseWriter, r *http.Request) {
-	log.Info("POST", "path", routes.SignUp)
+	log.Info(routes.SignUp)
 	var requestData SignUpRequest
 
 	err := json.NewDecoder(r.Body).Decode(&requestData)
@@ -171,6 +172,7 @@ type SignOutResponse struct {
 }
 
 func SignOut(w http.ResponseWriter, r *http.Request) {
+	log.Info(routes.SignOut)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "jwt",
 		Value:    "",
@@ -183,7 +185,7 @@ func SignOut(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Signed out successfully"})
 }
 
-func LoadRSAKey(filename string) (*rsa.PrivateKey, error) {
+func LoadRSAPrivateKey(filename string) (*rsa.PrivateKey, error) {
 	keyBytes, err := os.ReadFile(filename)
 	if err != nil {
 		log.Error("Could not read file", "error", err)
@@ -209,4 +211,127 @@ func LoadRSAKey(filename string) (*rsa.PrivateKey, error) {
 
 	log.Info("Successfully loaded RSA key", "size", privateKey.Size())
 	return privateKey, nil
+}
+
+type ValidateRequest struct {
+	Token string `json:"token"`
+}
+
+type ValidateResponse struct {
+	IsValid bool `json:"is_valid"`
+}
+
+func Validate(w http.ResponseWriter, r *http.Request) {
+	log.Info(routes.Validate) // Fixed incorrect log reference
+	var requestData ValidateRequest
+
+	err := json.NewDecoder(r.Body).Decode(&requestData)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Load the RSA public key (NOT the private key!)
+	publicKey, err := LoadRSAPublicKey("public-key.pem")
+	if err != nil {
+		log.Error("Failed to load public key", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse and verify the JWT token
+	token, err := jwt.Parse(requestData.Token, func(token *jwt.Token) (interface{}, error) {
+		// Ensure the signing method is RSA
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		return publicKey, nil
+	})
+
+	if err != nil {
+		log.Error("Token validation failed", "error", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(ValidateResponse{IsValid: false})
+		return
+	}
+
+	// Extract claims if token is valid
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		exp, ok := claims["exp"].(float64)
+		if !ok {
+			http.Error(w, "Invalid token format", http.StatusUnauthorized)
+			return
+		}
+		// Check if the token is expired
+		expirationTime := time.Unix(int64(exp), 0)
+		if expirationTime.After(time.Now()) {
+			log.Error("Token has expired")
+			http.Error(w, "Token has expired", http.StatusUnauthorized)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(ValidateResponse{IsValid: true})
+	} else {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(ValidateResponse{IsValid: false})
+	}
+}
+
+func LoadRSAPublicKey(filename string) (*rsa.PublicKey, error) {
+	keyBytes, err := os.ReadFile(filename)
+	if err != nil {
+		log.Error("Could not read public key file", "error", err)
+		return nil, fmt.Errorf("could not read public key file: %w", err)
+	}
+
+	block, _ := pem.Decode(keyBytes)
+	if block == nil {
+		log.Error("Could not decode PEM block in public key file")
+		return nil, fmt.Errorf("failed to decode PEM block containing public key")
+	}
+
+	// Parse the public key
+	pubKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		log.Error("Could not parse RSA public key", "error", err)
+		return nil, fmt.Errorf("could not parse RSA public key: %w", err)
+	}
+
+	// Ensure it's an RSA public key
+	rsaPubKey, ok := pubKey.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("key is not an RSA public key")
+	}
+
+	log.Info("Successfully loaded RSA public key")
+	return rsaPubKey, nil
+}
+
+type ParseRequest struct {
+	Token string `json:"token"`
+}
+
+type ParseResponse struct {
+	Email   string    `json:"email"`
+	Expires time.Time `json:"expires"`
+}
+
+func Parse(w http.ResponseWriter, r *http.Request) {
+	log.Info(routes.Parse)
+	var requestData ParseRequest
+	json.NewDecoder(r.Body).Decode(&requestData)
+	publicKey, _ := LoadRSAPublicKey("public-key.pem")
+	token, _ := jwt.Parse(requestData.Token, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return publicKey, nil
+	})
+
+	w.WriteHeader(http.StatusOK)
+	claims := token.Claims.(jwt.MapClaims)
+	expt := claims["exp"].(float64)
+	json.NewEncoder(w).Encode(ParseResponse{Email: claims["email"].(string), Expires: time.Unix(int64(expt), 0)})
 }
