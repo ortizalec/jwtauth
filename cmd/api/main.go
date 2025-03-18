@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"net/http"
 
 	"github.com/charmbracelet/log"
@@ -10,8 +11,28 @@ import (
 	"github.com/rs/cors"
 )
 
+type config struct {
+	addr        string
+	sqlitefile  string
+	version     string
+	servicename string
+}
+
 func main() {
-	db.InitDB()
+	var cfg config
+	flag.StringVar(&cfg.addr, "addr", ":3001", "HTTP network address")
+	flag.StringVar(&cfg.sqlitefile, "sqlfile", "users.db", "Sqlite3 Database File")
+	cfg.servicename = "papersplease"
+	cfg.version = "1.0.0"
+	flag.Parse()
+
+	log.Info("launching service",
+		"name", cfg.servicename,
+		"addr", cfg.addr,
+		"db", cfg.sqlitefile,
+		"version", cfg.version)
+
+	db.InitDB(cfg.sqlitefile)
 	defer db.DB.Close()
 
 	mux := http.NewServeMux()
@@ -31,6 +52,5 @@ func main() {
 		AllowCredentials: true,
 	}).Handler(mux)
 
-	log.Info("Starting papersplease :3001")
-	log.Error(http.ListenAndServe(":3001", handler))
+	log.Error(http.ListenAndServe(*&cfg.addr, handler))
 }

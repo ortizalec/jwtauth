@@ -18,32 +18,19 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type SignInRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type SignInResponse struct {
-	Message string `json:"msg"`
-}
-
 func SignIn(w http.ResponseWriter, r *http.Request) {
 	log.Info(routes.SignIn)
-	var requestData SignInRequest
+	var requestData routes.SignInRequest
 
 	err := json.NewDecoder(r.Body).Decode(&requestData)
 	if err != nil {
-		log.Error("Invalid JSON", r.Body)
+		log.Error("invalid json", r.Body)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	if requestData.Email == "" || requestData.Password == "" {
-		log.Error("Email and password are required", requestData)
+		log.Error("email and password are required", requestData)
 		http.Error(w, "Email and password are required", http.StatusBadRequest)
 		return
 	}
@@ -53,7 +40,7 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 	err = db.DB.QueryRow("SELECT password FROM users WHERE email = ?", requestData.Email).Scan(&hashedPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Error("Invalid email or password")
+			log.Error("invalid email or password")
 			http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		} else {
 			log.Error("Database error", err)
@@ -95,7 +82,7 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send response
-	responseData := SignInResponse{Message: "sign in successful"}
+	responseData := routes.SignInResponse{Message: "sign in successful"}
 	w.Header().Set("Content-Type", "application/json")
 	http.SetCookie(w, &http.Cookie{
 		Name:     "jwt",
@@ -111,31 +98,17 @@ func SignIn(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(responseData)
 }
 
-type HeartbeatResponse struct {
-	Timestamp time.Time `json:"timestamp"`
-	Status    string    `json:"status"`
-}
-
 func Heartbeat(w http.ResponseWriter, r *http.Request) {
 	log.Info(routes.Heartbeat)
-	data := HeartbeatResponse{Timestamp: time.Now(), Status: "healthy"}
+	data := routes.HeartbeatResponse{Timestamp: time.Now(), Status: "healthy"}
 	w.Header().Set("Content-Type", "apllication/json")
 	w.WriteHeader((http.StatusOK))
 	json.NewEncoder(w).Encode(data)
 }
 
-type SignUpRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type SignUpResponse struct {
-	Message string `json:"message"`
-}
-
 func SignUp(w http.ResponseWriter, r *http.Request) {
 	log.Info(routes.SignUp)
-	var requestData SignUpRequest
+	var requestData routes.SignUpRequest
 
 	err := json.NewDecoder(r.Body).Decode(&requestData)
 	if err != nil {
@@ -161,14 +134,10 @@ func SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responseData := SignUpResponse{Message: "User registered successfully"}
+	responseData := routes.SignUpResponse{Message: "User registered successfully"}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(responseData)
-}
-
-type SignOutResponse struct {
-	Message string `json:"message"`
 }
 
 func SignOut(w http.ResponseWriter, r *http.Request) {
@@ -213,17 +182,9 @@ func LoadRSAPrivateKey(filename string) (*rsa.PrivateKey, error) {
 	return privateKey, nil
 }
 
-type ValidateRequest struct {
-	Token string `json:"token"`
-}
-
-type ValidateResponse struct {
-	IsValid bool `json:"is_valid"`
-}
-
 func Validate(w http.ResponseWriter, r *http.Request) {
 	log.Info(routes.Validate) // Fixed incorrect log reference
-	var requestData ValidateRequest
+	var requestData routes.ValidateRequest
 
 	err := json.NewDecoder(r.Body).Decode(&requestData)
 	if err != nil {
@@ -231,7 +192,6 @@ func Validate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load the RSA public key (NOT the private key!)
 	publicKey, err := LoadRSAPublicKey("public-key.pem")
 	if err != nil {
 		log.Error("Failed to load public key", "error", err)
@@ -239,7 +199,6 @@ func Validate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse and verify the JWT token
 	token, err := jwt.Parse(requestData.Token, func(token *jwt.Token) (interface{}, error) {
 		// Ensure the signing method is RSA
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
@@ -252,7 +211,7 @@ func Validate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error("Token validation failed", "error", err)
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(ValidateResponse{IsValid: false})
+		json.NewEncoder(w).Encode(routes.ValidateResponse{IsValid: false})
 		return
 	}
 
@@ -272,10 +231,10 @@ func Validate(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(ValidateResponse{IsValid: true})
+		json.NewEncoder(w).Encode(routes.ValidateResponse{IsValid: true})
 	} else {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(ValidateResponse{IsValid: false})
+		json.NewEncoder(w).Encode(routes.ValidateResponse{IsValid: false})
 	}
 }
 
@@ -309,19 +268,15 @@ func LoadRSAPublicKey(filename string) (*rsa.PublicKey, error) {
 	return rsaPubKey, nil
 }
 
-type ParseRequest struct {
-	Token string `json:"token"`
-}
-
-type ParseResponse struct {
-	Email   string    `json:"email"`
-	Expires time.Time `json:"expires"`
-}
-
 func Parse(w http.ResponseWriter, r *http.Request) {
 	log.Info(routes.Parse)
-	var requestData ParseRequest
-	json.NewDecoder(r.Body).Decode(&requestData)
+	var requestData routes.ParseRequest
+	cookie, err := r.Cookie("jwt")
+	if err != nil {
+		http.Error(w, "no jwt cookie in request", http.StatusUnauthorized)
+		return
+	}
+	requestData.Token = cookie.Value
 	publicKey, _ := LoadRSAPublicKey("public-key.pem")
 	token, _ := jwt.Parse(requestData.Token, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
@@ -333,5 +288,5 @@ func Parse(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	claims := token.Claims.(jwt.MapClaims)
 	expt := claims["exp"].(float64)
-	json.NewEncoder(w).Encode(ParseResponse{Email: claims["email"].(string), Expires: time.Unix(int64(expt), 0)})
+	json.NewEncoder(w).Encode(routes.ParseResponse{Email: claims["email"].(string), Expires: time.Unix(int64(expt), 0)})
 }
