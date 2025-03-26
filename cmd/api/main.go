@@ -5,9 +5,9 @@ import (
 	"net/http"
 
 	"github.com/charmbracelet/log"
-	"github.com/ortizalec/papersplease/internal/db"
-	"github.com/ortizalec/papersplease/internal/handlers"
-	"github.com/ortizalec/papersplease/internal/routes"
+	"github.com/ortizalec/jwtauth/internal/db"
+	"github.com/ortizalec/jwtauth/internal/handlers"
+	"github.com/ortizalec/jwtauth/internal/routes"
 	"github.com/rs/cors"
 )
 
@@ -22,7 +22,7 @@ func main() {
 	var cfg config
 	flag.StringVar(&cfg.addr, "addr", ":3001", "HTTP network address")
 	flag.StringVar(&cfg.sqlitefile, "sqlfile", "users.db", "Sqlite3 Database File")
-	cfg.servicename = "papersplease"
+	cfg.servicename = "jwtauth"
 	cfg.version = "1.0.0"
 	flag.Parse()
 
@@ -32,8 +32,11 @@ func main() {
 		"db", cfg.sqlitefile,
 		"version", cfg.version)
 
-	db.InitDB(cfg.sqlitefile)
-	defer db.DB.Close()
+	sqldb, err := db.InitDB(cfg.sqlitefile)
+	if err != nil {
+		panic("failed to get db")
+	}
+	defer sqldb.Close()
 
 	mux := http.NewServeMux()
 
@@ -41,8 +44,6 @@ func main() {
 	mux.HandleFunc(routes.SignIn, handlers.SignIn)
 	mux.HandleFunc(routes.SignUp, handlers.SignUp)
 	mux.HandleFunc(routes.SignOut, handlers.SignOut)
-	mux.HandleFunc(routes.Validate, handlers.Validate)
-	mux.HandleFunc(routes.Parse, handlers.Parse)
 
 	// Apply CORS Middleware
 	handler := cors.New(cors.Options{

@@ -9,8 +9,6 @@ const (
 	SignIn    = "POST /api/auth/signin"
 	SignUp    = "POST /api/auth/signup"
 	SignOut   = "POST /api/auth/signout"
-	Validate  = "POST /api/auth/validate"
-	Parse     = "POST /api/auth/parse"
 )
 
 type SignInRequest struct {
@@ -33,26 +31,9 @@ type SignUpRequest struct {
 }
 
 type SignUpResponse struct {
-	Message string `json:"message"`
+	ID uint `json:"id"`
 }
 
 type SignOutResponse struct {
 	Message string `json:"message"`
-}
-
-type ValidateRequest struct {
-	Token string `json:"token"`
-}
-
-type ValidateResponse struct {
-	IsValid bool `json:"is_valid"`
-}
-
-type ParseRequest struct {
-	Token string `json:"token"`
-}
-
-type ParseResponse struct {
-	Email   string    `json:"email"`
-	Expires time.Time `json:"expires"`
 }

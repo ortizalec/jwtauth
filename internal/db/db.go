@@ -4,28 +4,22 @@ import (
 	"database/sql"
 
 	"github.com/charmbracelet/log"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/ortizalec/jwtauth/internal/models"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-var DB *sql.DB
+var DB *gorm.DB
 
-func InitDB(f string) {
+func InitDB(f string) (*sql.DB, error) {
+	log.Info("Init DB")
 	var err error
-	DB, err = sql.Open("sqlite3", f)
+	DB, err = gorm.Open(sqlite.Open(f), &gorm.Config{})
 	if err != nil {
-		log.Error("Failed to connect to database:", err)
+		panic("failed to connect database")
 	}
+	DB.AutoMigrate(&models.User{})
 
-	createTableSQL := `CREATE TABLE IF NOT EXISTS users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		email TEXT UNIQUE NOT NULL,
-		password TEXT NOT NULL
-	);`
+	return DB.DB()
 
-	_, err = DB.Exec(createTableSQL)
-	if err != nil {
-		log.Error("Failed to create users table:", err)
-	}
-
-	log.Info("Database initialized successfully")
 }
